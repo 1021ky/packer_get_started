@@ -162,6 +162,7 @@ docker.ubuntu: output will be in this color.
 vaivailx@MacBook-Pro-2 get_started %
 ```
 
+
 ビルドされたイメージでコンテナを起動する
 ```zsh
 vaivailx@MacBook-Pro-2 get_started % docker run -it sha256:b7576f43e93cd697189cd233719b00aad926b19e7b716107abc0b8100524892b
@@ -288,4 +289,179 @@ docker.ubuntu: output will be in this color.
 ```zsh
 packer build --var docker_image=ubuntu:groovy .
 ```
+
+# [aws get started](https://learn.hashicorp.com/tutorials/packer/get-started-install-cli?in=packer/aws-get-started)
+
+
+試してみる
+
+```zsh
+vaivailx@MacBook-Pro-2 packer_tutorial_aws % packer build aws-ubuntu.pkr.hcl
+amazon-ebs.ubuntu: output will be in this color.
+
+...
+
+==> Builds finished. The artifacts of successful builds are:
+--> amazon-ebs.ubuntu: AMIs were created:
+us-west-2: ami-050a406e0175ead86
+
+vaivailx@MacBook-Pro-2 packer_tutorial_aws %
+
+二回連続で実行してみると
+
+```zsh
+vaivailx@MacBook-Pro-2 packer_tutorial_aws % packer build aws-ubuntu.pkr.hcl
+amazon-ebs.ubuntu: output will be in this color.
+
+...
+
+Build 'amazon-ebs.ubuntu' errored after 7 seconds 633 milliseconds: Error: AMI Name: 'learn-packer-linux-aws' is used by an existing AMI: ami-050a406e0175ead86
+
+==> Wait completed after 7 seconds 633 milliseconds
+
+==> Some builds didn't complete successfully and had errors:
+--> amazon-ebs.ubuntu: Error: AMI Name: 'learn-packer-linux-aws' is used by an existing AMI: ami-050a406e0175ead86
+
+==> Builds finished but no artifacts were created.
+vaivailx@MacBook-Pro-2 packer_tutorial_aws %
+```
+
+AMI Nameが被るのでエラー
+
+## [Provision](https://learn.hashicorp.com/tutorials/packer/aws-get-started-provision?in=packer/aws-get-started)
+
+```zsh
+vaivailx@MacBook-Pro-2 packer_tutorial_aws % packer build aws-ubuntu.pkr.hcl
+amazon-ebs.ubuntu: output will be in this color.
+
+==> amazon-ebs.ubuntu: Prevalidating any provided VPC information
+==> amazon-ebs.ubuntu: Prevalidating AMI Name: learn-packer-linux-aws-redis
+
+...
+
+==> amazon-ebs.ubuntu: Connected to SSH!
+==> amazon-ebs.ubuntu: Provisioning with shell script: /var/folders/3c/93rbry1s0nq0rygk72hjrckc0000gn/T/packer-shell373802359
+    amazon-ebs.ubuntu: Installing Redis
+
+...
+
+==> amazon-ebs.ubuntu: Waiting for AMI to become ready...
+==> amazon-ebs.ubuntu: Terminating the source AWS instance...
+==> amazon-ebs.ubuntu: Cleaning up any extra volumes...
+==> amazon-ebs.ubuntu: No volumes to clean up, skipping
+==> amazon-ebs.ubuntu: Deleting temporary security group...
+==> amazon-ebs.ubuntu: Deleting temporary keypair...
+Build 'amazon-ebs.ubuntu' finished after 4 minutes 1 second.
+
+==> Wait completed after 4 minutes 1 second
+
+==> Builds finished. The artifacts of successful builds are:
+--> amazon-ebs.ubuntu: AMIs were created:
+us-west-2: ami-076815770f9a19d4a
+
+vaivailx@MacBook-Pro-2 packer_tutorial_aws %
+```
+
+## [Varialble](https://learn.hashicorp.com/tutorials/packer/aws-get-started-variables?in=packer/aws-get-started)
+
+以下のように変数や、関数を使って動的な値を設定することもできる。
+
+```zsh
+variable "ami_prefix" {
+  type    = string
+  default = "learn-packer-linux-aws-redis"
+}
+
+locals {
+  timestamp = regex_replace(timestamp(), "[- TZ:]", "")
+}
+
+```
+
+上記のコードを足して、ビルドする
+
+```zsh
+vaivailx@MacBook-Pro-2 packer_tutorial_aws % packer build aws-ubuntu.pkr.hcl
+amazon-ebs.ubuntu: output will be in this color.
+
+==> amazon-ebs.ubuntu: Prevalidating any provided VPC information
+==> amazon-ebs.ubuntu: Prevalidating AMI Name: learn-packer-linux-aws-redis-20210615140504
+    amazon-ebs.ubuntu: Found Image ID: ami-0dd273d94ed0540c0
+
+...
+
+==> amazon-ebs.ubuntu: Deleting temporary keypair...
+Build 'amazon-ebs.ubuntu' finished after 4 minutes 7 seconds.
+
+==> Wait completed after 4 minutes 7 seconds
+
+==> Builds finished. The artifacts of successful builds are:
+--> amazon-ebs.ubuntu: AMIs were created:
+us-west-2: ami-0cd05190afeaaafab
+
+vaivailx@MacBook-Pro-2 packer_tutorial_aws %
+```
+
+## [Parallel Builds](https://learn.hashicorp.com/tutorials/packer/aws-get-started-parallel-builds?in=packer/aws-get-started)
+
+sourceブロックを足して、buildブロックのsourcesにビルド対象を追加して、
+`packer build .`すると、2つのイメージをビルドできた。
+
+```zsh
+source "amazon-ebs" "ubuntu-focal" {
+  ami_name      = "${var.ami_prefix}-focal-${local.timestamp}"
+  instance_type = "t2.micro"
+  region        = "us-west-2"
+  source_ami_filter {
+    filters = {
+      name                = "ubuntu/images/*ubuntu-focal-20.04-amd64-server-*"
+      root-device-type    = "ebs"
+      virtualization-type = "hvm"
+    }
+    most_recent = true
+    owners      = ["099720109477"]
+  }
+  ssh_username = "ubuntu"
+}
+```
+
+ビルド
+
+```zsh
+vaivailx@MacBook-Pro-2 packer_tutorial_aws % packer build .
+amazon-ebs.ubuntu: output will be in this color.
+amazon-ebs.ubuntu-focal: output will be in this color.
+
+==> amazon-ebs.ubuntu: Prevalidating any provided VPC information
+==> amazon-ebs.ubuntu: Prevalidating AMI Name: learn-packer-linux-aws-redis-20210615143312
+
+...
+
+==> amazon-ebs.ubuntu: Waiting for AMI to become ready...
+==> amazon-ebs.ubuntu-focal: Terminating the source AWS instance...
+==> amazon-ebs.ubuntu-focal: Cleaning up any extra volumes...
+==> amazon-ebs.ubuntu-focal: No volumes to clean up, skipping
+==> amazon-ebs.ubuntu-focal: Deleting temporary security group...
+==> amazon-ebs.ubuntu-focal: Deleting temporary keypair...
+Build 'amazon-ebs.ubuntu-focal' finished after 4 minutes 3 seconds.
+==> amazon-ebs.ubuntu: Terminating the source AWS instance...
+==> amazon-ebs.ubuntu: Cleaning up any extra volumes...
+==> amazon-ebs.ubuntu: No volumes to clean up, skipping
+==> amazon-ebs.ubuntu: Deleting temporary security group...
+==> amazon-ebs.ubuntu: Deleting temporary keypair...
+Build 'amazon-ebs.ubuntu' finished after 5 minutes 46 seconds.
+
+==> Wait completed after 5 minutes 46 seconds
+
+==> Builds finished. The artifacts of successful builds are:
+--> amazon-ebs.ubuntu: AMIs were created:
+us-west-2: ami-07122f34f64f602c4
+
+--> amazon-ebs.ubuntu-focal: AMIs were created:
+us-west-2: ami-0912c8f0fed4833a6
+
+vaivailx@MacBook-Pro-2 packer_tutorial_aws %
+```
+
+パラレルで実行するけど、実行時間は少し延びている。
 
